@@ -59,8 +59,8 @@ def process_hours(x):
     else:
         return "Проверь"
 
+# Вход файла эксель с указанием листа
 def process_file(file_path):
-    # Исполняемый файл
     try:
         df = pd.read_excel(
             file_path,
@@ -84,7 +84,7 @@ def process_file(file_path):
         df['Начало'] = df.apply(lambda row: pd.Timestamp.combine(row['Начало (дата)'], row['Начало (время)']), axis=1)
         df['Конец'] = df.apply(lambda row: pd.Timestamp.combine(row['Конец (дата)'], row['Конец (время)']), axis=1)
 
-        # Смены
+        # Считаем смены тут
         shifts_mask = df['Тип'].isin([
             "Смена. Основная",
             "Смена. Доп",
@@ -96,7 +96,7 @@ def process_file(file_path):
         shifts_df['hours'] = shifts_df['time_diff'].dt.total_seconds() / 3600
         shifts_df['Часы с перерывами'] = shifts_df['hours'].apply(process_hours)
 
-        # Нарушения
+        # А нарушения/па/наставничество тут
         violations_mask = (
             df['Тип'].str.startswith('Наставничество.') |
             (df['Тип'].str.startswith('ПА.') &
@@ -116,14 +116,14 @@ def process_file(file_path):
         violations_df['Часы с перерывами'] = violations_df['hours'].apply(process_hours)
         violations_df['Нарушения'] = violations_df['Часы с перерывами'] * -1
         
-        # Соединяем данные
+        # Соединяем расчёты
         shifts_agg = shifts_df.groupby(['Логин', 'Теги'])['Часы с перерывами'].sum().reset_index()
         violations_agg = violations_df.groupby(['Логин', 'Теги'])['Нарушения'].sum().reset_index()
         merged = pd.merge(shifts_agg, violations_agg, on=['Логин', 'Теги'], how='outer')
         merged.fillna(0, inplace=True)
         merged['Чистые часы'] = merged['Часы с перерывами'] + merged['Нарушения']
     
-        # Сохранение результата
+        # Сохраняем получившиеся цифры
         output_path = os.path.splitext(file_path)[0] + '_processed.xlsx'
         merged.to_excel(output_path, index=False)
         logging.debug(f"Сохранен результат в файл: {output_path}")
@@ -132,6 +132,7 @@ def process_file(file_path):
         logging.error(f"Произошла ошибка: {str(e)}")
         return f"Error: {str(e)}"
 
+# Создаём приложение
 class App:
     def __init__(self, root):
         self.root = root
@@ -202,18 +203,17 @@ class App:
             while True:
                 frame = ImageTk.PhotoImage(gif.copy())
                 frames.append(frame)
-                gif.seek(len(frames))  # Переход к следующему кадру
+                gif.seek(len(frames))
         except EOFError:
             pass
         return frames   
 
     def gif_and_music(self):
         if self.animation:
-            self.root.after_cancel(self.animation)  # Останавливаем предыдущую анимацию
+            self.root.after_cancel(self.animation)
         self.current_frame = 0
         self.animate_gif()
 
-        # Воспроизведение музыки
         pygame.mixer.music.load(self.music_path)
         pygame.mixer.music.play(-1)
 
@@ -221,14 +221,17 @@ class App:
     def animate_gif(self):
         if self.current_frame < len(self.gif_frames):
             self.gif_label.config(image=self.gif_frames[self.current_frame])
-            self.gif_label.image = self.gif_frames[self.current_frame]  # Сохраняем ссылку
+            self.gif_label.image = self.gif_frames[self.current_frame]
             self.current_frame += 1
-            self.animation = self.root.after(30, self.animate_gif)  # Обновляем каждые 100 мс
+            self.animation = self.root.after(30, self.animate_gif)  # Обновляем каждые 30 мс
         else:
-            self.current_frame = 0  # Сбрасываем на начало для повторения
+            self.current_frame = 0  # Повторяем
             self.animate_gif()
 
 if __name__ == "__main__":
+    logging.debug("Запуск программы")
     root = tk.Tk()
     app = App(root)
     root.mainloop()
+    logging.debug("Завершение программы")
+    pygame.mixer.music.stop()
